@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+data/
+*.pdf
+output/
+tmp/
+.DS_Store
