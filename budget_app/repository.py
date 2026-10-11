@@ -1,28 +1,9 @@
-"""JSONL 스트리밍과 임시 파일을 이용한 원자적 저장만 담당한다."""
+"""JSONL 스트리밍과 검증 완료 후 전체 파일 재작성을 담당한다."""
 
 import json
 import os
-from contextlib import contextmanager
 from pathlib import Path
-from tempfile import NamedTemporaryFile
-from typing import Any, Iterator, Iterable, TextIO
-
-
-@contextmanager
-def atomic_writer(path: Path) -> Iterator[TextIO]:
-    """같은 폴더의 임시 파일을 완성한 후에만 기존 파일을 교체한다."""
-    temporary = None
-    try:
-        with NamedTemporaryFile("w", encoding="utf-8", newline="", dir=path.parent,
-                                prefix=".budget-", suffix=".tmp", delete=False) as stream:
-            temporary = Path(stream.name)
-            yield stream
-            stream.flush()
-            os.fsync(stream.fileno())
-        os.replace(temporary, path)
-    finally:
-        if temporary is not None:
-            temporary.unlink(missing_ok=True)
+from typing import Any, Iterator, Iterable
 
 
 def reverse_lines(path: Path) -> Iterator[str]:
@@ -68,6 +49,6 @@ class Repository:
                 yield row
 
     def write(self, name: str, rows: Iterable[dict[str, Any]]) -> None:
-        with atomic_writer(self.path(name)) as stream:
-            for row in rows:
-                stream.write(json.dumps(row, ensure_ascii=False) + "\n")
+        # 모든 행을 읽고 검증·직렬화한 뒤에만 원본을 쓰기 모드로 연다.
+        content = "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows)
+        self.path(name).write_text(content, encoding="utf-8")

@@ -3,14 +3,14 @@
 import csv
 from dataclasses import asdict, replace
 from heapq import merge
+from io import StringIO
 from pathlib import Path
 from typing import Any, Iterator
 from uuid import uuid4
 
 from .models import (CSV_FIELDS, Transaction, positive_int, split_tags,
                      valid_category, valid_date, valid_month)
-from .repository import Repository, atomic_writer
-
+from .repository import Repository
 
 class BudgetService:
     def __init__(self, repository: Repository) -> None:
@@ -173,11 +173,12 @@ class BudgetService:
                for name in ("transactions", "categories", "budgets")):
             raise ValueError("내보내기 경로로 앱 저장 파일을 사용할 수 없습니다.")
         count = 0
-        with atomic_writer(path) as stream:
+        with StringIO(newline="") as stream:
             writer = csv.DictWriter(stream, fieldnames=CSV_FIELDS)
             writer.writeheader()
             for tx in self.search(month=month, start=start, end=end):
                 writer.writerow({"date": tx.date, "type": tx.type, "category": tx.category,
                                  "amount": tx.amount, "memo": tx.memo, "tags": ",".join(tx.tags)})
                 count += 1
+            path.write_text(stream.getvalue(), encoding="utf-8")
         return count

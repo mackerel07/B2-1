@@ -9,7 +9,6 @@ import tempfile
 import unittest
 from dataclasses import asdict
 from pathlib import Path
-from unittest.mock import patch
 
 from budget_app.models import CSV_FIELDS, Transaction
 from budget_app.repository import Repository, reverse_lines
@@ -138,7 +137,6 @@ class BudgetAppTests(unittest.TestCase):
             self.assertEqual((self.data / "transactions.jsonl").read_bytes(), original)
         self.run_cli("delete", "--id", "a")
         self.assertEqual(list(self.service.transactions()), [])
-        self.assertFalse(list(self.data.glob(".budget-*.tmp")))
 
     def test_invalid_values_and_options(self):
         cases = [("list", "--limit", "0"), ("list", "--limit", "-1"),
@@ -229,22 +227,12 @@ class BudgetAppTests(unittest.TestCase):
             self.run_cli("export", "--out", str(target), "--month", "2024-01", success=False)
             self.assertEqual(target.read_bytes(), original)
 
-    def test_atomic_replace_failure_preserves_original_and_cleans_temp(self):
-        self.service.add(self.tx())
-        before = (self.data / "transactions.jsonl").read_bytes()
-        with patch("budget_app.repository.os.replace", side_effect=OSError("replace failed")):
-            with self.assertRaises(OSError):
-                self.service.delete("a")
-        self.assertEqual((self.data / "transactions.jsonl").read_bytes(), before)
-        self.assertFalse(list(self.data.glob(".budget-*.tmp")))
-
     def test_partial_rewrite_failure_preserves_original(self):
         path = self.data / "transactions.jsonl"
         path.write_text(json.dumps(asdict(self.tx())) + "\n{broken}\n", encoding="utf-8")
         before = path.read_bytes()
         self.run_cli("delete", "--id", "a", success=False)
         self.assertEqual(path.read_bytes(), before)
-        self.assertFalse(list(self.data.glob(".budget-*.tmp")))
 
     def test_corrupt_metadata_and_model_report_errors(self):
         for name, contents, arguments in [
